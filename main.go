@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
-	"strings"
+	"regexp"
+	"unicode/utf8"
+
+	util "github.com/rainbowechoes/record/util"
 )
 
 var (
@@ -49,7 +53,7 @@ func main() {
 					}
 				}
 			} else {
-				log.Printf("exec shell occur error: %v, output: %s\n", err, output)
+				fmt.Printf("exec shell occur error: %v, output: %s\n", err, output)
 			}
 		}
 	}
@@ -64,15 +68,35 @@ func main() {
 // read user shell operation and exec in local
 func readShellExecLocal() (string, error) {
 	localHostInfo()
-	fmt.Scanln(&userOp)
-	if userOp == "exit" {
+	op, err := readUserShellInput()
+	// read user input occur error
+	if err != nil {
+		return "", err
+	}
+	// user want to exit
+	if op == "exit" {
 		return "exit", nil
 	}
-	if userOp != "" {
-		output, err := exec.Command(userOp).Output()
+	if op != "" {
+		r := regexp.MustCompile(`^\S*`)
+		cmd := r.FindStringSubmatch(op)[0]
+		length := utf8.RuneCountInString(cmd)
+		args := []string{}
+		if length < utf8.RuneCountInString(op) {
+			args = append(args, util.ReplaceUnixLine(op[length+1:]))
+		}
+		output, err := exec.Command(cmd, args...).Output()
 		return string(output), err
 	}
+	// user input nothing
 	return "", nil
+}
+
+// from Record shell read user input
+func readUserShellInput() (string, error) {
+	ins := bufio.NewReader(os.Stdin)
+	op, err := ins.ReadString('\n')
+	return util.ReplaceUnixLine(op), err
 }
 
 // read local host info
@@ -83,6 +107,5 @@ func localHostInfo() {
 		log.Fatalln("occur error in get host info.")
 		os.Exit(1)
 	}
-	fmt.Printf("%s@local %s>", strings.Replace(string(whoami), "\n", "", -1), strings.Replace(string(pwd), "\n", "", -1))
-
+	fmt.Printf("%s@local %s>", util.ReplaceUnixLine(string(whoami)), util.ReplaceUnixLine(string(pwd)))
 }
